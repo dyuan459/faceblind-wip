@@ -1,0 +1,372 @@
+@startuml SequenceDiagram
+' !theme cyborg
+title Complete User Journey: Stream → Preview → Save → Exit
+
+actor User
+participant "Driver" as D
+participant "Context" as CTX
+participant "GUIHandler" as G1
+participant "MainGUI" as M1
+participant "EventBus" as B1
+participant "IOFacade" as I1
+participant "AssetFacade" as A1
+participant "TrackingFacade" as T1
+participant "StreamGUI" as S1
+participant "PreviewGUI" as P1
+participant "Video" as V1
+
+== Application Initialization ==
+
+User -> D: Start application
+activate D
+
+create G1
+D -> G1: Initialize GUI
+activate G1
+G1 --> D: Return 0
+
+create CTX
+D -> CTX: Create Context
+activate CTX
+CTX --> D: Return 0
+deactivate CTX
+
+G1 -> M1: Show Main GUI and loading
+activate M1
+M1 --> G1: Return 0
+
+create B1
+D -> B1: Initialize Event Bus
+activate B1
+B1 --> D: Return 0
+deactivate B1
+
+== Subsystem Initialization (Parallel) ==
+
+create I1
+D -> I1: Initialize IO subsystem
+activate I1
+I1 --> D: Return 0
+
+par IO setup
+    activate B1
+    I1 -> B1: Subscribe to IO events
+    B1 --> I1: Return 0
+    deactivate I1
+    deactivate B1
+else Initialize Asset subsystem
+    create A1
+    D -> A1: Initialize Asset subsystem
+    activate A1
+    A1 --> D: Return 0
+end
+
+par Assets setup
+    A1 -> B1: Publish assets requested event
+    activate B1
+    B1 --> A1: Return 0
+    deactivate A1
+    B1 -> I1: Request asset loading
+    activate I1
+    I1 -> A1: Import images to assets
+    activate A1
+    A1 -> A1: Set up assets and profiles
+    A1 --> I1: Return 0
+    deactivate A1
+    I1 --> B1: Return 0
+    deactivate I1
+    deactivate B1
+else Initialize Tracking subsystem
+    create T1
+    D -> T1: Initialize Tracking subsystem
+    activate T1
+    T1 --> D: Return 0
+    deactivate T1
+end
+
+== Navigation: MainGUI → StreamGUI ==
+
+User -> M1: User clicks "Start Streaming"
+M1 -> G1: ButtonPush() - Stream mode
+activate G1
+
+activate CTX
+G1 -> CTX: GetContext()
+CTX --> G1: Return Context data
+
+create S1
+G1 -> S1: CreateNextGUI(STREAM_SCREEN)
+activate S1
+G1 -> S1: SetContext(context)
+S1 --> G1: Return 0
+
+G1 -> G1: Update current GUI reference
+G1 -> D: Notify GUI change
+D --> G1: Return 0
+
+G1 -> M1: Self-destruct command
+deactivate M1
+destroy M1
+deactivate G1
+
+== Start Webcam Stream ==
+
+User -> S1: User clicks "Turn on Camera"
+S1 -> B1: Publish RecordingEvent(isStarting=true)
+activate B1
+B1 -> I1: Notify IO to start camera
+activate I1
+I1 -> I1: InitializeWebcamStream()
+
+create V1
+I1 -> V1: Create Video singleton
+activate V1
+V1 --> I1: Return 0
+
+I1 -> B1: Publish camera started event
+I1 --> B1: Return 0
+deactivate I1
+
+B1 -> T1: Notify recording started
+activate T1
+B1 -> S1: Notify recording started
+B1 -> A1: Notify recording started
+activate A1
+
+A1 --> B1: Return 0
+T1 --> B1: Return 0
+S1 --> B1: Return 0
+deactivate B1
+
+== Initial Detection & Asset Creation ==
+
+T1 -> V1: Request video frames
+V1 --> T1: Return video frames
+T1 -> T1: ProcessFrame()\nDetect objects, initialize trackers
+T1 -> B1: PublishDetectionEvent(bbox, confidence)
+activate B1
+B1 --> T1: Return 0
+
+note over S1: Display black screen\nwhile waiting for\ndetection
+
+B1 -> A1: Notify ObjectDetectedEvent
+activate A1
+A1 -> T1: GetBBox()
+T1 --> A1: Return BBox data
+A1 -> A1: CreateAssetFromDetection()\nDraw asset on frame
+A1 -> B1: PublishAssetCreatedEvent(asset)
+B1 --> A1: Return 0
+
+B1 -> S1: Notify AssetCreatedEvent
+S1 -> A1: GetFrame() - request processed frame
+A1 --> S1: Return processed frame
+S1 -> S1: Display(frame) - show with overlays
+deactivate B1
+deactivate A1
+
+== Recording Loop (Arbitrary Duration) ==
+
+loop While User is Recording
+    par Tracking & Detection
+        T1 -> V1: Request video frames
+        V1 --> T1: Return frames
+        T1 -> T1: UpdateAllTrackers()\nPredict or re-detect
+    else Asset Rendering
+        A1 -> V1: Request video frames
+        V1 --> A1: Return frames
+        A1 -> T1: GetBBox() - for all tracked objects
+        T1 --> A1: Return BBox data
+        A1 -> A1: Render assets on frame\nfor each tracked object
+    else Display
+        S1 -> A1: GetFrame() - request latest
+        A1 --> S1: Return processed frame
+        S1 -> S1: Display(frame)
+    end
+end
+
+note over User, S1: User records for\narbitrary time period
+
+== Stop Recording & Transition to PreviewGUI ==
+
+User -> S1: User clicks "Stop Recording"
+S1 -> S1: RecordStop()
+S1 -> B1: Publish RecordingEvent(isStarting=false)
+activate B1
+B1 -> T1: Notify recording stopped
+T1 -> T1: StopTracking()
+T1 --> B1: Return 0
+
+B1 -> I1: Notify recording stopped
+activate I1
+I1 -> I1: StopStream()
+I1 -> I1: Save recording to temp file
+I1 --> B1: Return 0
+deactivate I1
+deactivate B1
+
+activate CTX
+S1 -> CTX: SetContext(context)
+note right: Store recording path,\nactive profile, etc.
+CTX --> S1: Return 0
+
+create P1
+S1 -> P1: CreateNextGUI(PREVIEW_SCREEN)
+activate P1
+S1 -> P1: SetContext(context)
+P1 --> S1: Return 0
+
+S1 -> G1: ChangeScreen(PREVIEW_SCREEN)
+activate G1
+G1 -> G1: Update current GUI reference
+G1 -> D: Notify GUI change
+D --> G1: Return 0
+deactivate G1
+
+S1 -> S1: Self-destruct
+deactivate S1
+destroy S1
+
+== Preview Recorded Video ==
+
+P1 -> CTX: GetContext()
+CTX --> P1: Return Context(recordingPath)
+deactivate CTX
+
+P1 -> I1: ReadVideo(recordingPath)
+activate I1
+I1 -> I1: InitializeFileStream(recordingPath)
+I1 -> V1: Update video reference
+V1 --> I1: Return 0
+I1 --> P1: Return video metadata
+deactivate I1
+
+P1 -> V1: Request frames for preview
+V1 --> P1: Return frames
+P1 -> P1: Display(frame) - initial frame
+
+note over User, P1: User previews recording\nwith playback controls
+
+opt User uses playback controls
+    alt Pause
+        User -> P1: User clicks "Pause"
+        P1 -> P1: Pause()
+        P1 -> P1: Stop frame updates
+    else Rewind
+        User -> P1: User clicks "Rewind"
+        P1 -> P1: Rewind()
+        P1 -> V1: Seek backward
+        V1 --> P1: Return new frame
+        P1 -> P1: Display(frame)
+    else Fast Forward
+        User -> P1: User clicks "Fast Forward"
+        P1 -> P1: FastForward()
+        P1 -> V1: Seek forward
+        V1 --> P1: Return new frame
+        P1 -> P1: Display(frame)
+    end
+end
+
+== Save Video to File ==
+
+User -> P1: User clicks "Save"
+P1 -> P1: PushSave()
+
+opt User selects custom directory
+    P1 -> P1: SelectSaveDirectory()
+    User -> P1: Choose directory
+    P1 -> P1: Store save path
+else Use default directory
+    P1 -> I1: GetOutputDirectory()
+    activate I1
+    I1 --> P1: Return default path
+    deactivate I1
+end
+
+P1 -> B1: PublishFileOperationEvent("save", filePath)
+activate B1
+B1 -> I1: Request save video
+activate I1
+I1 -> I1: WriteVideo(video, filePath)
+note right: MP4Writer handles\nfile writing with\ncompression
+
+alt Save successful
+    I1 -> B1: PublishFileOperationEvent("save", filePath, success=true)
+    B1 -> P1: Notify save success
+    P1 -> P1: Display success message
+else Save failed
+    I1 -> B1: PublishFileOperationEvent("save", filePath, success=false)
+    B1 -> P1: Notify save failure
+    P1 -> P1: Display error message
+end
+
+deactivate I1
+deactivate B1
+
+== Return to MainGUI or Exit ==
+
+alt User exits application
+    User -> P1: User clicks "Exit" or close button
+    P1 -> G1: Notify exit request
+    activate G1
+    G1 -> D: Signal application exit
+    D -> D: exit() - cleanup subsystems
+    
+    note over D, V1: Cleanup sequence
+    
+    D -> T1: Cleanup tracking resources
+    deactivate T1
+    destroy T1
+    
+    D -> A1: Cleanup asset cache
+    deactivate A1
+    destroy A1
+    
+    D -> I1: CleanupTempFiles()
+    activate I1
+    I1 -> I1: Delete temp files
+    I1 --> D: Return 0
+    deactivate I1
+    destroy I1
+    
+    D -> B1: Unsubscribe all handlers
+    deactivate B1
+    destroy B1
+    
+    destroy V1
+    
+    D -> P1: Destroy GUI
+    deactivate P1
+    destroy P1
+    
+    D -> G1: Cleanup GUI handler
+    deactivate G1
+    destroy G1
+    
+    D -> User: Application closed (exit code 0)
+    deactivate D
+    
+else User returns to main menu
+    User -> P1: User clicks "Back"
+    P1 -> P1: ButtonPush() - Back
+    
+    create M1
+    P1 -> M1: CreateNextGUI(MAIN_SCREEN)
+    activate M1
+    P1 -> M1: SetContext(context)
+    M1 --> P1: Return 0
+    
+    P1 -> G1: ChangeScreen(MAIN_SCREEN)
+    activate G1
+    G1 -> G1: Update current GUI reference
+    G1 -> D: Notify GUI change
+    D --> G1: Return 0
+    deactivate G1
+    
+    P1 -> P1: Self-destruct
+    deactivate P1
+    destroy P1
+    
+    note over M1: User back at\nmain menu
+end
+
+@enduml

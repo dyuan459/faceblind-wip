@@ -1,0 +1,835 @@
+@startuml
+!theme cyborg
+skinparam groupInheritance 2
+title UML Class Diagram
+center header
+<b><size:24><color:blue>This is the full UML diagram for the ideal project, much will likely be cut as implementation progresses.</color></size></b>
+endheader
+package "Main System"{
+    class Driver {
+        +main(args: String[]): int
+        -exit(): int
+    }
+    note top of Driver
+        Entry point of the application.
+        Initializes subsystems and starts the main GUI loop.
+        After finishing, calls exit() to clean up resources.
+        Everything is dependent on this but hidden for brevity.
+
+        Enhanced by Claude:
+        Holds reference to current active GUI. When GUI transitions
+        occur, Driver updates its reference to the new GUI instance
+        after the old GUI self-destructs.
+    end note
+
+    class Context {
+        +videoPath: String
+        +recordingPath: String
+        +activeProfile: String
+        +isRecording: boolean
+        +lastUploadPath: String
+    }
+    interface AssetBar <<Template>>{
+        +ShowAssets():int
+        +Hide():int
+        +SelectProfile(profileId: String): int
+        +CreateProfile(profileName: String, faceAssets: Asset, signAssets: Asset): int
+    }
+    interface GUIHandler <<Template>>{
+        -UI uis[2]
+        +ButtonPush():int
+        +ChangeScreen(int):int
+        +SettingsPush():int
+        +GetFrame():Frame
+        +HelpButton(int priority):int
+        +PublishEvent(event: Event): void
+        +SubscribeToEvents(): void
+        +CreateNextGUI(screenId: int): GUIHandler
+        +GetContext(): Context
+        +SetContext(context: Context): void
+    }
+    note right of GUIHandler
+        Event methods added by Claude:
+        - PublishEvent(): Sends events to EventBus
+        - SubscribeToEvents(): Registers for relevant events
+
+        Navigation methods added by Claude:
+        - ChangeScreen(): Made public for GUI transitions
+        - CreateNextGUI(): Factory method to instantiate next screen
+        - GetContext()/SetContext(): Pass data between screens
+
+        Self-destructing navigation pattern:
+        Current GUI creates successor, passes context, then destructs.
+        Keeps memory footprint minimal with single active GUI.
+    end note
+    interface GUIDisplay <<Template>>{
+        +Display(Frame):int
+        +LoadVideoStream(): int
+    }
+    class FileGUI{
+        +Display(Frame):int 
+        +LoadVideoStream(): int
+        -UI uis[2]
+        +ButtonPush():int
+        -ChangeScreen(int):int
+        +SettingsPush():int
+        +GetFrame():Frame
+        +HelpButton(int priority):int
+        +UploadVid(): int
+        +ShowAssets(): int
+        +Hide(): int
+        +SelectProfile(profileId: String): int
+        +CreateProfile(profileName: String, faceAssets: Asset, signAssets: Asset): int
+    }
+    class MainGUI {
+        -UI uis[2]
+        +ButtonPush():int
+        -ChangeScreen(int):int
+        +SettingsPush():int
+        +GetFrame():Frame
+        +HelpButton(int priority):int
+        +PushExit(): int
+    }
+    Class StreamGUI{
+        +Display(Frame):int
+        +LoadVideoStream(): int
+        -UI uis[2]
+        +ButtonPush():int
+        -ChangeScreen(int):int
+        +SettingsPush():int
+        +GetFrame():Frame
+        +HelpButton(int priority):int
+        +Display(Frame):int
+        +RecordStart():int
+        +RecordStop():int
+        +VisibilityToggle():int
+        +PerformDetectionTest(): int
+        +AcceptTest(): int
+        +RejectTest(): int
+        +ShowAssets(): int
+        +Hide(): int
+        +SelectProfile(profileId: String): int
+        +CreateProfile(profileName: String, faceAssets: Asset, signAssets: Asset): int
+    }
+    class PreviewGUI{
+        +Display(Frame):int
+        +LoadVideoStream(): int
+        -UI uis[2]
+        +ButtonPush():int
+        -ChangeScreen(int):int
+        +SettingsPush():int
+        +GetFrame():Frame
+        +HelpButton(int priority):int
+        +Display(Frame):int
+        +PushSave(): int
+        +Rewind(): int
+        +FastForward(): int
+        +Pause(): int
+        +SelectSaveDirectory(): String
+    }
+    class SettingsGUI{
+        -UI uis[2]
+        +ButtonPush():int
+        -ChangeScreen(int):int
+        +GetFrame():Frame
+        +HelpButton(int priority):int
+        +ToggleAssetVisibility(): int
+        +SelectOutputDirectory(): int
+        +ApplySettings(): int
+        +ResetToDefaults(): int
+        +PublishEvent(event: Event): void
+        +SubscribeToEvents(): void
+        +CreateNextGUI(screenId: int): GUIHandler
+        +GetContext(): Context
+        +SetContext(context: Context): void
+    }
+}
+
+
+package "Event System" {
+    class EventBus {
+        +Subscribe(eventType: String, handler: EventHandler): void
+        +Unsubscribe(eventType: String, handler: EventHandler): void
+        +Publish(event: Event): void
+        -subscribers: Map<String, EventHandler[]>
+        -eventQueue: Event[]
+        -ProcessEvents(): void
+    }
+
+    interface Event {
+        +GetType(): String
+        +GetTimestamp(): long
+        +GetData(): Object
+    }
+
+    class RecordingEvent {
+        +GetType(): String
+        +GetTimestamp(): long
+        +GetData(): Object
+        -isStarting: boolean
+    }
+
+    class ObjectDetectedEvent {
+        +GetType(): String
+        +GetTimestamp(): long
+        +GetData(): Object
+        -bbox: (xcoord,ycoord,height,width)
+        -confidence: float
+    }
+
+    class AssetCreatedEvent {
+        +GetType(): String
+        +GetTimestamp(): long
+        +GetData(): Object
+        -asset: Asset
+    }
+
+    class FileOperationEvent {
+        +GetType(): String
+        +GetTimestamp(): long
+        +GetData(): Object
+        -operation: String
+        -filePath: String
+        -success: boolean
+    }
+
+    class ProfileChangeEvent {
+        +GetType(): String
+        +GetTimestamp(): long
+        +GetData(): Object
+        -oldProfile: Profile
+        -newProfile: Profile
+    }
+    note right of ProfileChangeEvent
+        Added by Claude: Missing from Event System
+
+        Emitted when user switches between asset profiles.
+        Mentioned in CLAUDE.md but not present in original UML.
+
+        Usage:
+        - IOFacade publishes when loading profile from file
+        - AssetFacade subscribes to update active assets
+        - GUIHandler subscribes to refresh display
+
+        Enables coordinated profile switching across subsystems.
+    end note
+
+}
+note top of "Event System"
+    Event System Package - Added by Claude
+
+    Implements publish-subscribe pattern to enable
+    decoupled communication between subsystems.
+    Components can publish events and subscribe to
+    events they care about without direct references.
+
+    Personal note: Essentially, each subsystem subscribes
+    to events they're dependent on. When an event occurs,
+    the relevant subsystem is notified via its handler and they
+    can take appropriate action. 
+end note
+
+note bottom of AssetCreatedEvent
+    Fired when new assets are generated.
+    Allows GUI to update display and tracking
+    to associate assets with detections.
+end note
+
+note bottom of FileOperationEvent
+    Covers all file I/O operations including
+    video saves, config updates, and asset exports.
+    Provides success/failure feedback.
+end note
+
+package "Asset Subsystem"{
+    class AssetFacade{
+        -assetCache: Map<String, Asset[]>
+        -activeProfile: String
+        -isInitialized: boolean
+        +GetAssets(): Asset[]
+        +GetAssetsForProfile(profileName: String): Asset[]
+        +GetFaceAssets(): FaceAsset[]
+        +GetSignAssets(): SignAsset[]
+        +LoadProfile(profileName: String): int
+        +GetActiveProfile(): String
+        +SetActiveProfile(profileName: String): int
+        +CreateAssetFromDetection(detection: DetectionResult): Asset
+        +CacheAssets(profileName: String, assets: Asset[]): void
+        +ClearCache(): void
+        +ValidateAssets(assets: Asset[]): boolean
+        +PublishAssetCreatedEvent(asset: Asset): void
+        +SubscribeToDetectionEvents(): void
+        +SubscribeToProfileChangeEvents(): void
+        +GetAssetCount(): int
+        +IsProfileLoaded(profileName: String): boolean
+    }
+
+    class Profile{
+        +profileName: String
+        +faceAsset: Asset
+        +signAsset: Asset
+        +isActive: boolean
+        +GetProfileName(): String
+        +GetFaceAsset(): Asset
+        +GetSignAsset(): Asset
+        +GetAllAssets(): Asset[]
+        +IsActive(): boolean
+        +SetActive(active: boolean): void
+        +Validate(): boolean
+    }
+
+    class ProfileManager{
+        -profiles: Map<String, Profile>
+        -activeProfile: String
+        -minimumProfileCount: int
+        +LoadProfile(profileName: String): Profile
+        +SaveProfile(profile: Profile, profileName: String): int
+        +GetActiveProfile(): Profile
+        +SetActiveProfile(profileName: String): int
+        +ListAvailableProfiles(): String[]
+        +CreateProfile(profileName: String, faceAssets: Asset[], signAssets: Asset[]): int
+        +DeleteProfile(profileName: String): int
+        +GetProfileCount(): int
+        +ValidateMinimumProfiles(): boolean
+        +PublishProfileChangeEvent(oldProfile: Profile, newProfile: Profile): int
+        +SubscribeToProfileSwitchEvents(): int
+    }
+
+    interface AssetFactoryFactory<<Factory>>{
+        -factories: Map<String, AssetFactoryFactory>
+        +GenerateAsset(assetType: String, image: Image): Asset = 0
+        +CreateFaceFactory(): FaceFactory = 0
+        +CreateSignFactory(): SignFactory = 0
+        +GetFactory(assetType: String): AssetFactoryFactory
+        +RegisterFactory(assetType: String, factory: AssetFactoryFactory): void
+        +GetSupportedTypes(): String[]
+        +ValidateAssetType(assetType: String): boolean
+        +CreateAssetFromDetection(detection: DetectionResult, image: Image): Asset
+    }
+    class FaceFactory{
+        -templateAssets: Map<String, Image>
+        -defaultFaceAsset: Image
+        +GenerateAsset(assetType: String, image: Image): FaceAsset
+        +CreateFaceAsset(image: Image): FaceAsset
+        +LoadFaceTemplate(templateName: String): Image
+        +GetAvailableTemplates(): String[]
+        +SetDefaultTemplate(templateName: String): void
+        +ValidateFaceAsset(asset: FaceAsset): boolean
+        +ScaleFaceAsset(asset: FaceAsset, scale: float): FaceAsset
+        +CreateRandomFaceAsset(): FaceAsset
+    }
+    class SignFactory{
+        -signTemplates: Map<String, Image>
+        -defaultSignAsset: Image
+        +GenerateAsset(assetType: String, image: Image): SignAsset
+        +CreateSignAsset(image: Image): SignAsset
+        +LoadSignTemplate(templateName: String): Image
+        +GetAvailableTemplates(): String[]
+        +SetDefaultTemplate(templateName: String): void
+        +ValidateSignAsset(asset: SignAsset): boolean
+        +ScaleSignAsset(asset: SignAsset, scale: float): SignAsset
+    }
+    interface Asset<<Abstract Product>>{
+        -assetId: String
+        -height: int
+        -width: int
+        -image: Image
+        -position: (x, y)
+        -scale: float
+        -profileName: String
+        -isActive: boolean
+        +GetAssetId(): String
+        +GetDim(): (height, width)
+        +GetImage(): Image
+        +GetPosition(): (x, y)
+        +SetPosition(x: int, y: int): void
+        +GetScale(): float
+        +SetScale(scale: float): void
+        +GetProfileName(): String
+        +SetProfileName(profileName: String): void
+        +IsActive(): boolean
+        +SetActive(active: boolean): void
+        +Render(targetFrame: Frame, bbox: (xcoord, ycoord, width, height)): Frame = 0
+        +Validate(): boolean = 0
+    }
+    class FaceAsset{
+        -assetId: String
+        -height: int
+        -width: int
+        -image: Image
+        -position: (x, y)
+        -scale: float
+        -profileName: String
+        -isActive: boolean
+        -faceDetectionId: int
+        -overlayType: String
+        +GetAssetId(): String
+        +GetDim(): (height, width)
+        +GetImage(): Image
+        +GetPosition(): (x, y)
+        +SetPosition(x: int, y: int): void
+        +GetScale(): float
+        +SetScale(scale: float): void
+        +GetProfileName(): String
+        +SetProfileName(profileName: String): void
+        +IsActive(): boolean
+        +SetActive(active: boolean): void
+        +Render(targetFrame: Frame, bbox: (xcoord, ycoord, width, height)): Frame
+        +Validate(): boolean
+        +GetFaceDetectionId(): int
+        +SetFaceDetectionId(detectionId: int): void
+        +GetOverlayType(): String
+        +SetOverlayType(overlayType: String): void
+        +FitToFace(faceBbox: (xcoord, ycoord, width, height)): void
+    }
+    class SignAsset{
+        -assetId: String
+        -height: int
+        -width: int
+        -image: Image
+        -position: (x, y)
+        -scale: float
+        -profileName: String
+        -isActive: boolean
+        +GetAssetId(): String
+        +GetDim(): (height, width)
+        +GetImage(): Image
+        +GetPosition(): (x, y)
+        +SetPosition(x: int, y: int): void
+        +GetScale(): float
+        +SetScale(scale: float): void
+        +GetProfileName(): String
+        +SetProfileName(profileName: String): void
+        +IsActive(): boolean
+        +SetActive(active: boolean): void
+        +Render(targetFrame: Frame, bbox: (xcoord, ycoord, width, height)): Frame
+        +Validate(): boolean
+    }
+}
+package "Tracking subsystem" {
+    class TrackingFacade{
+        -privacyMode: boolean
+        -lastPersonDetectionTime: long
+        -privacyTimeout: long
+        +GetBBox(): (xcoord,ycoord,height,width)
+        -TrackingPipeline(): int
+        +PublishDetectionEvent(bbox: BoundingBox, confidence: float): void
+        +SubscribeToRecordingEvents(): void
+        -ProcessFrame(frame: Frame): DetectionResult[]
+        -IsPersonDetected(): boolean
+        -GetPersonCount(): int
+        -ShouldBlackoutScreen(): boolean
+        -EnablePrivacyMode(enable: boolean): void
+        -SetPrivacyTimeout(timeout: long): void
+        -GetTimeSinceLastPersonDetection(): long
+        +StartTracking(): int
+        +StopTracking(): int
+        +ResetTracking(): int
+    }
+    class Transformations{
+        -resizeTarget: (width, height)
+        -normalizeEnabled: boolean
+        +Preprocess(frame: Frame): Frame
+        +ResizeFrame(frame: Frame, width: int, height: int): Frame
+        +NormalizeFrame(frame: Frame): Frame
+        +SetResizeTarget(width: int, height: int): void
+        +GetResizeTarget(): (width, height)
+        +EnableNormalization(enable: boolean): void
+        +IsNormalizationEnabled(): boolean
+    }
+    class ObjectDetector{
+        -confidenceThreshold: float
+        -maxDetections: int
+        +Detect(frame: Frame): DetectionResult[]
+        -DetectPersons(frame: Frame): DetectionResult[]
+        -DetectSigns(frame: Frame): DetectionResult[]
+        +IsPersonDetected(frame: Frame): boolean
+        +GetPersonCount(frame: Frame): int
+        +SetConfidenceThreshold(threshold: float): void
+        +GetConfidenceThreshold(): float
+        +SetMaxDetections(max: int): void
+        +GetMaxDetections(): int
+        +ValidateDetection(result: DetectionResult): boolean
+    }
+    class ObjectTracker{
+        -trackers: Map<int, Tracker>
+        -nextTrackerId: int
+        -maxTrackers: int
+        +InitializeTracker(frame: Frame, bbox: (xcoord,ycoord,height,width)): int
+        +AddTracker(bbox: (xcoord,ycoord,height,width)): int
+        +UpdateTracker(frame: Frame): (xcoord,ycoord,height,width)[]
+        +UpdateAllTrackers(frame: Frame): Map<int, (xcoord,ycoord,height,width)>
+        +GetTrackerCount(): int
+        +GetActiveTrackerCount(): int
+        +GetTrackerResults(): (xcoord,ycoord,height,width)[]
+        +GetTrackerById(trackerId: int): (xcoord,ycoord,height,width)
+        +RemoveTracker(trackerId: int): int
+        +Reset(): int
+        +IsTrackerActive(trackerId: int): boolean
+        +SetMaxTrackers(max: int): void
+        +AssociateDetectionsToTrackers(detections: DetectionResult[]): Map<int, DetectionResult>
+    }
+    class DetectionResult{
+        -objectId: int
+        -className: String
+        -confidence: float
+        -bbox: (xcoord, ycoord, width, height)
+        -timestamp: long
+        -trackerId: int
+        +GetObjectId(): int
+        +GetClassName(): String
+        +GetConfidence(): float
+        +GetBoundingBox(): (xcoord, ycoord, width, height)
+        +GetTimestamp(): long
+        +GetTrackerId(): int
+        +SetTrackerId(trackerId: int): void
+        +IsValid(): boolean
+        +GetArea(): float
+        +GetCenterPoint(): (x, y)
+    }
+    class ModelManager{
+        -currentModel: Model
+        -modelPath: String
+        -isLoaded: boolean
+        -logger: Logger
+        +LoadModel(modelPath: String, level: int): int
+        +LoadModelParams(configPath: String): int
+        +GetModel(): Model
+        +IsModelLoaded(): boolean
+        +UnloadModel(): int
+        +GetModelPath(): String
+        +LogInfo(message: String): void
+        +LogError(message: String): void
+        +ValidateModel(modelPath: String): boolean
+        +GetModelVersion(): String
+    } 
+    class Filter{
+        -confidenceThreshold: float
+        -minArea: float
+        -maxArea: float
+        +FilterByConfidence(results: DetectionResult[], threshold: float): DetectionResult[]
+        +FilterByArea(results: DetectionResult[], minArea: float, maxArea: float): DetectionResult[]
+        +RemoveDuplicates(results: DetectionResult[]): DetectionResult[]
+        +ValidateDetections(results: DetectionResult[]): DetectionResult[]
+        +SetConfidenceThreshold(threshold: float): void
+        +GetConfidenceThreshold(): float
+        +SetAreaLimits(minArea: float, maxArea: float): void
+        +GetAreaLimits(): (minArea: float, maxArea: float)
+    }
+
+    class PoseDetector{
+        -poseThreshold: float
+        -supportedPoses: String[]
+        +DetectPose(frame: Frame): PoseType
+        +GetPoseType(detection: DetectionResult): PoseType
+        +ValidatePose(pose: PoseType): boolean
+        +GetSupportedPoses(): String[]
+        +SetPoseThreshold(threshold: float): void
+    }
+}
+
+package "IOSubsystem" {
+    class IOFacade{
+        +ReadImage(String): Image
+        +ReadVideo(String): Video
+        +ReadConfig(String): String
+        +WriteVideo(Video): int
+        +WriteConfig(String): int
+        +PublishFileOperationEvent(operation: String, filePath: String, success: boolean): int
+        +SubscribeToSaveRequests(): int
+    }
+    note right of IOFacade
+        ReadVideo includes webcam support
+
+        Event methods added by Claude:
+        - PublishFileOperationEvent(): Emits FileOperationEvent for I/O operations
+        - SubscribeToSaveRequests(): Listens for save/export requests from GUI
+    end note
+    class FileReader<<Interface>>{
+        +Read(filePath: String): Data = 0
+        +Validate(filePath: String): boolean = 0
+        +GetFileSize(filePath: String): long = 0
+    }
+    class FileWriter<<Interface>>{
+        +Write(data: Data, filePath: String): int = 0
+        +ValidateOutput(filePath: String): boolean = 0
+        +GetWriteStatus(): int = 0
+    }
+    note right of FileReader
+        Interface methods enhanced by Claude:
+        - Read(): Now includes proper parameters and return types
+        - Validate(): File format validation before reading
+        - GetFileSize(): For progress tracking and memory management
+    end note
+    note right of FileWriter
+        Interface methods enhanced by Claude:
+        - Write(): Proper data and filepath parameters with status return
+        - ValidateOutput(): Verify successful write operations
+        - GetWriteStatus(): Monitor write progress for large files
+    end note
+    class IOFactory<<Factory>>{
+        -SelectReader(String): FileReader
+        -SelectWriter(String): FileWriter
+        +ReadImage(String): Image
+        +ReadVideo(String): Video
+        +ReadConfig(String): String
+        +WriteVideo(Video): int
+        +WriteConfig(String): int
+    }
+    note right of IOFactory
+        PNG reading for this project
+        but easily extensible to other formats
+        under ReadImage, similar for video and config
+    end note
+    class PNGReader{
+        +Read(filePath: String): Image
+        +Validate(filePath: String): boolean
+        +GetFileSize(filePath: String): long
+        +GetImageDimensions(filePath: String): (width, height)
+    }
+    class MP4Reader{
+        +Read(filePath: String): Video
+        +Validate(filePath: String): boolean
+        +GetFileSize(filePath: String): long
+        +GetVideoMetadata(filePath: String): VideoInfo
+    }
+    class WebCamReader{
+        +Read(deviceId: int): Video
+        +Validate(deviceId: int): boolean
+        +GetFrameRate(): int
+        +GetAvailableDevices(): int[]
+    }
+    class JSONReader{
+        +Read(filePath: String): String
+        +Validate(filePath: String): boolean
+        +GetFileSize(filePath: String): long
+        +Parse(jsonString: String): Config
+    }
+    class MP4Writer{
+        +Write(data: Video, filePath: String): int
+        +ValidateOutput(filePath: String): boolean
+        +GetWriteStatus(): int
+        +SetCompressionLevel(level: int): int
+    }
+    class JSONWriter{
+        +Write(data: String, filePath: String): int
+        +ValidateOutput(filePath: String): boolean
+        +GetWriteStatus(): int
+        +FormatJSON(data: Config): String
+    }
+
+    class Config <<singleton>>{
+        +showAssets: boolean
+        +outputDirectory: String
+        +Validate(): boolean
+    }
+
+    class ConfigManager{
+        -currentConfig: Config
+        +LoadUserPreferences(filePath: String): Config
+        +SaveUserPreferences(config: Config, filePath: String): int
+        +GetDefaultConfig(): Config
+        +ValidateConfig(config: Config): boolean
+        +GetShowAssets(): boolean
+        +SetShowAssets(showAssets: boolean): int
+        +GetOutputDirectory(): String
+        +SetOutputDirectory(directory: String): int
+        +PublishConfigChangeEvent(oldConfig: Config, newConfig: Config): int
+        +SubscribeToConfigRequests(): int
+    }
+
+
+
+    class StreamManager{
+        +InitializeWebcamStream(deviceId: int): int
+        +InitializeFileStream(filePath: String): int
+        +GetNextFrame(): Frame
+        +IsStreamActive(): boolean
+        +StopStream(): int
+        +GetStreamMetadata(): StreamInfo
+        +PublishFrameReadyEvent(frame: Frame): int
+        +SubscribeToStreamControlEvents(): int
+    }
+
+    class IOHandler{
+        +CreateTempFile(): String
+        +CreateTempDirectory(): String
+        +CleanupTempFiles(): int
+        +CleanupExpiredFiles(maxAge: long): int
+        +ValidateFile(filePath: String): boolean
+        +CopyFile(source: String, destination: String): int
+        +DeleteFile(filePath: String): int
+        +GetFileMetadata(filePath: String): FileInfo
+        +GetTempFileCount(): int
+    }
+    class ValidationService{
+        +ValidateImageFormat(filePath: String): boolean
+        +ValidateVideoFormat(filePath: String): boolean
+        +ValidateConfigFormat(filePath: String): boolean
+        +CheckFileIntegrity(filePath: String): boolean
+        +GetSupportedFormats(): String[]
+    }
+}
+
+note top of StreamManager
+    Added by Claude
+
+    Manages real-time video streams from webcam
+    or file sources. Handles frame delivery,
+    stream metadata, and coordinates with
+    tracking system for privacy processing.
+end note
+
+
+
+package "VideoSingleton" {
+    class video{
+        -UniqueEnforcer(): boolean
+    }
+}
+/'Relations'/
+/'Event System Relations - Real-Time Bidirectional'/
+    Event <|-- RecordingEvent
+    Event <|-- ObjectDetectedEvent
+    Event <|-- AssetCreatedEvent
+    Event <|-- FileOperationEvent
+    Event <|-- ProfileChangeEvent
+
+    /' Bidirectional for parallel publish-subscribe '/
+    GUIHandler <..> EventBus: <<publishes/subscribes>>
+    TrackingFacade <..> EventBus: <<publishes/subscribes>>
+    AssetFacade <..> EventBus: <<publishes/subscribes>>
+    IOFacade <..> EventBus: <<publishes/subscribes>>
+
+    /' Aggregations for EventBus ownership '/
+    GUIHandler o--> EventBus
+    TrackingFacade o--> EventBus
+    AssetFacade o--> EventBus
+    IOFacade o--> EventBus
+
+    note on link
+        Bidirectional connections added by Claude for real-time parallel communication.
+
+        Real-time bidirectional event communication.
+        Components publish events AND subscribe concurrently.
+        Used for async notifications (detections, state changes, file ops).
+
+        Hybrid communication model:
+        • Events: Async notifications and state changes
+        • Aggregations: Sync queries (see Cross-subsystem section)
+    end note
+/'Main'/
+    Driver o--> GUIHandler
+    GUIHandler --> Context
+
+    GUIHandler<|-- FileGUI
+    GUIHandler <|-- MainGUI
+    GUIHandler <|-- StreamGUI
+    GUIHandler <|-- PreviewGUI
+    GUIHandler <|-- SettingsGUI
+
+    GUIDisplay <|-- FileGUI
+    GUIDisplay <|-- StreamGUI
+    GUIDisplay <|-- PreviewGUI
+
+    AssetBar <|-- FileGUI
+    AssetBar <|-- StreamGUI
+
+
+    MainGUI ..> Driver: <<creates>>
+    MainGUI <..> StreamGUI: <<navigates to>>
+    MainGUI <..> FileGUI: <<navigates to>>
+
+    SettingsGUI <..> MainGUI: <<navigates to>>
+    SettingsGUI <..> StreamGUI: <<navigates to>>
+    SettingsGUI <..> FileGUI: <<navigates to>>
+
+    FileGUI <..> PreviewGUI: <<navigates to>>
+    StreamGUI <..> PreviewGUI: <<navigates to>>
+    
+/'Tracking Subsystem'/
+    TrackingFacade o--> Transformations
+    TrackingFacade o--> ObjectDetector
+    TrackingFacade o--> ObjectTracker
+    TrackingFacade o--> DetectionResult
+    TrackingFacade o--> ModelManager
+    TrackingFacade o--> Filter
+    TrackingFacade o--> PoseDetector
+    
+    ObjectDetector o--> ModelManager
+
+
+/'Asset Subsystem'/
+    AssetFactoryFactory <|-- FaceFactory
+    AssetFactoryFactory <|-- SignFactory
+
+    Asset <|-- FaceAsset
+    Asset <|-- SignAsset
+
+    AssetFacade ..> AssetFactoryFactory: <<uses>>
+
+    FaceFactory <.. FaceAsset: <<created by>>
+    SignFactory <.. SignAsset: <<created by>>
+
+    AssetFacade o--> Asset
+    AssetFacade o--> ProfileManager
+    AssetFacade ..> Profile: <<uses>>
+
+    ProfileManager --> Profile
+
+/'IOSubsystem'/
+    FileReader <|-- PNGReader
+    FileReader <|-- MP4Reader
+    FileReader <|-- JSONReader
+    FileReader <|-- WebCamReader
+
+    FileWriter <|-- JSONWriter
+    FileWriter <|-- MP4Writer
+
+    
+    IOFacade o--> ConfigManager
+    IOFacade o--> StreamManager
+    IOFacade o--> Config
+
+    ConfigManager o--> Config
+
+    IOFactory o--> FileReader
+    IOFactory o--> FileWriter
+    IOFactory o--> ValidationService
+
+    ConfigManager o--> ValidationService
+    StreamManager o--> ValidationService
+
+    IOFacade ..> IOFactory: <<uses>>
+    JSONReader ..> IOFactory: <<created by>>
+    
+    note on link
+        All reader/writers depend on
+        factory for selection logic
+        but hidden for brevity
+    end note
+
+/'VideoSingleton'/
+    video ..> IOFacade
+
+    TrackingFacade o--> video
+    GUIDisplay o--> video
+
+    note on link
+        Video singleton for stream access.
+        StreamManager connection hidden (accessed via IOFacade).
+    end note
+
+/'Cross-subsystem - Hybrid Communication'/
+    /' Synchronous queries via aggregation '/
+    GUIHandler o-- TrackingFacade: <<bidirectional quick queries>>
+    GUIHandler o-- AssetFacade: <<bidirectional quick queries>>
+    GUIHandler o-- IOFacade: <<bidirectional quick queries>>
+    AssetFacade o-- IOFacade: <<bidirectional quick queries>>
+    TrackingFacade o-- IOFacade: <<bidirectional quick queries>>
+
+
+Driver ..> TrackingFacade: <<creates>>
+Driver ..> AssetFacade: <<creates>>
+Driver ..> IOFacade: <<creates>>
+@enduml

@@ -1,0 +1,197 @@
+@startuml UseCaseDiagram
+!theme cyborg
+left to right direction
+
+title Privacy-Focused Video Overlay System - Use Case Diagram
+center header
+<b><size:18>Use Case Diagram - Enhanced by Claude</size></b>
+<i>Covers video processing, privacy features, profile management, and system configuration</i>
+endheader
+
+' Actors
+actor "Content Creator" as CC
+actor "Live Streamer" as LS
+actor "Privacy-Conscious\nUser" as PU
+
+' Actor inheritance - specialized users extend base content creator
+LS --|> CC
+PU --|> CC
+
+actor "System" as SYS <<automated>>
+note right of SYS
+  Automated actor that performs
+  system-triggered actions like
+  privacy blackout monitoring
+end note
+
+package "Video Processing" {
+  usecase "Record Live Webcam Stream" as UC1
+  usecase "Process Pre-recorded Video" as UC2
+  usecase "Upload Video File" as UC3
+  usecase "Preview Processed Footage" as UC4
+  usecase "Save Processed Video" as UC5
+  usecase "Delete Footage" as UC6
+  usecase "Select Save Directory" as UC7
+}
+
+package "Privacy & Security" {
+  usecase "Enable Privacy Mode" as UC8
+  usecase "Perform Detection Test" as UC9
+  usecase "Accept Detection Test" as UC10
+  usecase "Reject Detection Test" as UC11
+  usecase "Calibrate Person Detection" as UC12
+  usecase "Auto-Blackout Screen" as UC13
+  usecase "Monitor Person Presence" as UC14
+}
+
+package "Profile & Asset Management" {
+  usecase "Create New Profile" as UC15
+  usecase "Switch Profile Manually" as UC16
+  usecase "Switch Profile via Pose" as UC17
+  usecase "Modify Profile Assets" as UC18
+  usecase "Delete Profile" as UC19
+  usecase "Show/Hide Assets" as UC20
+  usecase "Upload Custom Assets" as UC21
+  usecase "Adjust Asset Size" as UC22
+}
+
+package "Settings & Configuration" {
+  usecase "Configure Output Directory" as UC23
+  usecase "Toggle Asset Visibility" as UC24
+  usecase "Apply Settings" as UC25
+  usecase "Reset to Defaults" as UC26
+}
+
+package "Navigation & Display" {
+  usecase "Navigate to Streaming Mode" as UC27
+  usecase "Navigate to File Mode" as UC28
+  usecase "Navigate to Preview Mode" as UC29
+  usecase "Navigate to Settings" as UC30
+  usecase "Return to Main Menu" as UC31
+}
+
+' Actor relationships with use cases
+' Content Creator - primary video processing actor
+CC --> UC2
+CC --> UC3
+CC --> UC4
+CC --> UC5
+CC --> UC6
+CC --> UC15
+CC --> UC16
+CC --> UC18
+CC --> UC19
+CC --> UC21
+CC --> UC22
+CC --> UC28
+CC --> UC29
+CC --> UC30
+CC --> UC31
+
+' Live Streamer - focuses on real-time streaming (specialized behaviors only)
+LS --> UC1
+LS --> UC17
+LS --> UC20
+LS --> UC27
+
+' Privacy-Conscious User - emphasizes privacy features (specialized behaviors only)
+PU --> UC8
+PU --> UC12
+
+' System - automated actions
+UC13 <--SYS
+UC14 <--SYS
+
+' Include relationships (mandatory sub-tasks)
+UC1 .> UC9 : <<include>>
+note on link
+  Detection test required
+  before streaming starts
+end note
+
+UC5 .> UC7 : <<include>>
+note on link
+  User must select
+  save location
+end note
+
+UC8 .> UC14 : <<include>>
+note on link
+  Privacy mode requires
+  continuous monitoring
+end note
+
+UC15 .> UC21 : <<include>>
+note on link
+  Creating profile requires
+  asset selection/upload
+end note
+
+' Extend relationships (optional enhancements)
+UC12 ..> UC11 : <<extend>>
+note on link
+  Calibration offered
+  after failed detection test
+  if in the best implementation
+  scenario
+end note
+
+UC17 ..> UC1 : <<extend>>
+note on link
+  Pose switching available
+  during live streaming
+end note
+
+UC13 ..> UC8 : <<extend>>
+note on link
+  Auto-blackout triggered
+  when privacy mode active
+  and person not detected
+end note
+
+UC22 ..> UC18 : <<extend>>
+note on link
+  Asset size adjustment
+  available when modifying
+  profile assets
+end note
+
+' Dependency relationships
+UC2 ..> UC3 : <<precedes>>
+UC4 ..> UC1 : <<follows>>
+UC4 ..> UC2 : <<follows>>
+
+' Constraints
+note bottom of UC19
+  **Constraint**: Can only delete
+  if more than 2 profiles exist
+  (minimum 2 required)
+end note
+
+note bottom of UC17
+  **Feature**: Hands-free profile
+  switching via gesture detection
+  (e.g., peace sign, thumbs up)
+end note
+
+note bottom of UC13
+  **Privacy Feature**: Immediately
+  blacks out screen when person
+  leaves frame. Monitors
+  lastPersonDetectionTime.
+end note
+
+note bottom of UC1
+  **Real-Time Requirement**:
+  Tracking delay ≤2 seconds.
+  Parallel event processing for
+  detection, asset overlay, display.
+end note
+
+footer
+<b>Privacy-Focused Video Overlay System</b>
+Enhanced by Claude based on functional requirements and system architecture
+Supports real-time streaming, privacy blackout, pose-triggered profile switching
+endfooter
+
+@enduml
